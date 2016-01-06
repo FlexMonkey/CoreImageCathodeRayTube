@@ -7,12 +7,26 @@
 //
 
 import UIKit
+import GLKit
+import AVFoundation
+import CoreMedia
+
 
 class ViewController: UIViewController {
 
-    let sunflower = CIImage(image: UIImage(named: "DSCF1145.jpg")!)!
+    let eaglContext = EAGLContext(API: .OpenGLES2)
+    let captureSession = AVCaptureSession()
     
-    let imageView = UIImageView(frame: CGRect(x: 100, y: 100, width: 1024, height: 683))
+    let imageView = GLKView()
+    
+    var cameraImage: CIImage?
+    
+    lazy var ciContext: CIContext =
+    {
+        [unowned self] in
+        
+        return  CIContext(EAGLContext: self.eaglContext)
+    }()
     
     let crtFilter = CRTFilter()
     
@@ -22,19 +36,89 @@ class ViewController: UIViewController {
        
         view.backgroundColor = UIColor.blackColor()
         
+        initialiseCaptureSession()
+        
         view.addSubview(imageView)
-
-        crtFilter.inputImage = sunflower
-  
-        imageView.image = UIImage(CIImage: crtFilter.outputImage)
+        imageView.context = eaglContext
+        imageView.delegate = self
     }
 
-    override func didReceiveMemoryWarning() {
-        super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
+    func initialiseCaptureSession()
+    {
+        captureSession.sessionPreset = AVCaptureSessionPresetPhoto
+        
+        guard let backCamera = (AVCaptureDevice.devicesWithMediaType(AVMediaTypeVideo) as! [AVCaptureDevice])
+            .filter({ $0.position == .Back })
+            .first else
+        {
+            fatalError("Unable to access back camera")
+        }
+        
+        do
+        {
+            let input = try AVCaptureDeviceInput(device: backCamera)
+            
+            captureSession.addInput(input)
+        }
+        catch
+        {
+            fatalError("Unable to access back camera")
+        }
+        
+        let videoOutput = AVCaptureVideoDataOutput()
+        
+        videoOutput.setSampleBufferDelegate(self,
+            queue: dispatch_queue_create("sample buffer delegate", DISPATCH_QUEUE_SERIAL))
+        
+        if captureSession.canAddOutput(videoOutput)
+        {
+            captureSession.addOutput(videoOutput)
+        }
+        
+        captureSession.startRunning()
     }
+    
+    override func viewDidLayoutSubviews()
+    {
+        imageView.frame = view.bounds
+    }
+}
 
+extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate
+{
+    func captureOutput(captureOutput: AVCaptureOutput!, didOutputSampleBuffer sampleBuffer: CMSampleBuffer!, fromConnection connection: AVCaptureConnection!)
+    {
+        connection.videoOrientation = AVCaptureVideoOrientation(rawValue: UIApplication.sharedApplication().statusBarOrientation.rawValue)!
+        
+        let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+        cameraImage = CIImage(CVPixelBuffer: pixelBuffer!)
+        
+        dispatch_async(dispatch_get_main_queue())
+            {
+                self.imageView.setNeedsDisplay()
+        }
+    }
+}
 
+extension ViewController: GLKViewDelegate
+{
+    func glkView(view: GLKView, drawInRect rect: CGRect)
+    {
+        guard let cameraImage = cameraImage else
+        {
+            return
+        }
+
+        crtFilter.inputImage = cameraImage
+        
+        let outputImage = crtFilter.outputImage
+        
+        ciContext.drawImage(outputImage,
+            inRect: CGRect(x: 0, y: 0,
+                width: imageView.drawableWidth,
+                height: imageView.drawableHeight),
+            fromRect: outputImage.extent)
+    }
 }
 
 class CRTFilter: CIFilter
@@ -73,17 +157,17 @@ class CRTColorFilter: CIFilter
         "kernel vec4 crtColor(__sample image) \n" +
         "{ \n" +
             
-        "   float pixelWidth = 4.0;" +
-        "   float pixelHeight = 8.0;" +
+        "   float pixelWidth = 8.0;" +
+        "   float pixelHeight = 12.0;" +
             
         "   int columnIndex = int(mod(samplerCoord(image).x / pixelWidth, 3.0)); \n" +
         "   int rowIndex = int(mod(samplerCoord(image).y, pixelHeight)); \n" +
             
-        "   float scanlineMultiplier = (rowIndex == 0) ? 0.3 : 1.0;" +
+        "   float scanlineMultiplier = (rowIndex == 0 || rowIndex == 1) ? 0.3 : 1.0;" +
             
-        "   float red = (columnIndex == 0) ? image.r : 0.0; " +
-        "   float green = (columnIndex == 1) ? image.g : 0.0; " +
-        "   float blue = (columnIndex == 2) ? image.b : 0.0; " +
+        "   float red = (columnIndex == 0) ? image.r : image.r * 0.1; " +
+        "   float green = (columnIndex == 1) ? image.g : image.g * 0.1; " +
+        "   float blue = (columnIndex == 2) ? image.b : image.b * 0.1; " +
             
         "   return vec4(red * scanlineMultiplier, green * scanlineMultiplier, blue * scanlineMultiplier, 1.0); \n" +
         "}"
