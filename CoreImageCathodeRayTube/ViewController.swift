@@ -153,13 +153,13 @@ class CRTColorFilter: CIFilter
 {
     var inputImage : CIImage?
     
+    var pixelWidth: CGFloat = 8.0
+    var pixelHeight: CGFloat = 12.0
+    
     let crtColorKernel = CIColorKernel(string:
-        "kernel vec4 crtColor(__sample image) \n" +
+        "kernel vec4 crtColor(__sample image, float pixelWidth, float pixelHeight) \n" +
         "{ \n" +
-            
-        "   float pixelWidth = 8.0;" +
-        "   float pixelHeight = 12.0;" +
-            
+  
         "   int columnIndex = int(mod(samplerCoord(image).x / pixelWidth, 3.0)); \n" +
         "   int rowIndex = int(mod(samplerCoord(image).y, pixelHeight)); \n" +
             
@@ -180,7 +180,7 @@ class CRTColorFilter: CIFilter
             crtColorKernel = crtColorKernel
         {
             let dod = inputImage.extent
-            let args = [inputImage as AnyObject]
+            let args = [inputImage, pixelWidth, pixelHeight]
             return crtColorKernel.applyWithExtent(dod, arguments: args)
         }
         return nil
