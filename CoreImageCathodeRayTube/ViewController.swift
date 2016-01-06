@@ -23,9 +23,18 @@ class ViewController: UIViewController {
         view.addSubview(imageView)
         
         let crtWarpFilter = CRTWarpFilter()
-        crtWarpFilter.inputImage = sunflower
+        let crtColorFilter = CRTColorFilter()
         
-        imageView.image = UIImage(CIImage: crtWarpFilter.outputImage!)
+        crtColorFilter.inputImage = sunflower
+        
+        let vignette = CIFilter(name: "CIVignette",
+            withInputParameters: [kCIInputImageKey: crtColorFilter.outputImage!,
+                kCIInputIntensityKey: 1.5,
+                kCIInputRadiusKey: 2])!
+        
+        crtWarpFilter.inputImage = vignette.outputImage!
+        
+        imageView.image = UIImage(CIImage: crtWarpFilter.outputImage)
     }
 
     override func didReceiveMemoryWarning() {
@@ -36,6 +45,43 @@ class ViewController: UIViewController {
 
 }
 
+class CRTColorFilter: CIFilter
+{
+    var inputImage : CIImage?
+    
+    let crtColorKernel = CIColorKernel(string:
+        "kernel vec4 crtColor(__sample image) \n" +
+        "{ \n" +
+            
+        "   float pixelWidth = 5.0;" +
+        "   float pixelHeight = 10.0;" +
+            
+        "   int columnIndex = int(mod(samplerCoord(image).x / pixelWidth, 3.0)); \n" +
+        "   int rowIndex = int(mod(samplerCoord(image).y, pixelHeight)); \n" +
+            
+        "   float scanlineMultiplier = (rowIndex == 0) ? 0.3 : 1.0;" +
+            
+        "   float red = (columnIndex == 0) ? image.r : 0.0; " +
+        "   float green = (columnIndex == 1) ? image.g : 0.0; " +
+        "   float blue = (columnIndex == 2) ? image.b : 0.0; " +
+            
+        "   return vec4(red * scanlineMultiplier, green * scanlineMultiplier, blue * scanlineMultiplier, 1.0); \n" +
+        "}"
+    )
+    
+    
+    override var outputImage : CIImage!
+    {
+        if let inputImage = inputImage,
+            crtColorKernel = crtColorKernel
+        {
+            let dod = inputImage.extent
+            let args = [inputImage as AnyObject]
+            return crtColorKernel.applyWithExtent(dod, arguments: args)
+        }
+        return nil
+    }
+}
 
 class CRTWarpFilter: CIFilter
 {
@@ -58,22 +104,22 @@ class CRTWarpFilter: CIFilter
     )
     
     override var outputImage : CIImage!
+    {
+        if let inputImage = inputImage,
+            crtWarpKernel = crtWarpKernel
         {
-            if let inputImage = inputImage,
-                crtWarpKernel = crtWarpKernel
-            {
-                let arguments = [CIVector(x: inputImage.extent.size.width, y: inputImage.extent.size.height)]
-                let extent = inputImage.extent.insetBy(dx: -1, dy: -1)
-           
-                return crtWarpKernel.applyWithExtent(extent,
-                    roiCallback:
-                    {
-                        (index, rect) in
-                        return rect
-                    },
-                    inputImage: inputImage,
-                    arguments: arguments)
-            }
-            return nil
+            let arguments = [CIVector(x: inputImage.extent.size.width, y: inputImage.extent.size.height)]
+            let extent = inputImage.extent.insetBy(dx: -1, dy: -1)
+       
+            return crtWarpKernel.applyWithExtent(extent,
+                roiCallback:
+                {
+                    (index, rect) in
+                    return rect
+                },
+                inputImage: inputImage,
+                arguments: arguments)
+        }
+        return nil
     }
 }
