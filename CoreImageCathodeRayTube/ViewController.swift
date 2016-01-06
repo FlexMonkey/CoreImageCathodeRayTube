@@ -14,6 +14,8 @@ class ViewController: UIViewController {
     
     let imageView = UIImageView(frame: CGRect(x: 100, y: 100, width: 1024, height: 683))
     
+    let crtFilter = CRTFilter()
+    
     override func viewDidLoad()
     {
         super.viewDidLoad()
@@ -21,20 +23,10 @@ class ViewController: UIViewController {
         view.backgroundColor = UIColor.blackColor()
         
         view.addSubview(imageView)
-        
-        let crtWarpFilter = CRTWarpFilter()
-        let crtColorFilter = CRTColorFilter()
-        
-        crtColorFilter.inputImage = sunflower
-        
-        let vignette = CIFilter(name: "CIVignette",
-            withInputParameters: [kCIInputImageKey: crtColorFilter.outputImage!,
-                kCIInputIntensityKey: 1.5,
-                kCIInputRadiusKey: 2])!
-        
-        crtWarpFilter.inputImage = vignette.outputImage!
-        
-        imageView.image = UIImage(CIImage: crtWarpFilter.outputImage)
+
+        crtFilter.inputImage = sunflower
+  
+        imageView.image = UIImage(CIImage: crtFilter.outputImage)
     }
 
     override func didReceiveMemoryWarning() {
@@ -45,6 +37,34 @@ class ViewController: UIViewController {
 
 }
 
+class CRTFilter: CIFilter
+{
+    var inputImage : CIImage?
+    
+    let crtWarpFilter = CRTWarpFilter()
+    let crtColorFilter = CRTColorFilter()
+    
+    let vignette = CIFilter(name: "CIVignette",
+        withInputParameters: [
+            kCIInputIntensityKey: 1.5,
+            kCIInputRadiusKey: 2])!
+    
+    override var outputImage: CIImage!
+    {
+        guard let inputImage = inputImage else
+        {
+            return nil
+        }
+
+        crtColorFilter.inputImage = inputImage
+        vignette.setValue(crtColorFilter.outputImage,
+            forKey: kCIInputImageKey)
+        crtWarpFilter.inputImage = vignette.outputImage!
+     
+        return crtWarpFilter.outputImage
+    }
+}
+
 class CRTColorFilter: CIFilter
 {
     var inputImage : CIImage?
@@ -53,8 +73,8 @@ class CRTColorFilter: CIFilter
         "kernel vec4 crtColor(__sample image) \n" +
         "{ \n" +
             
-        "   float pixelWidth = 5.0;" +
-        "   float pixelHeight = 10.0;" +
+        "   float pixelWidth = 4.0;" +
+        "   float pixelHeight = 8.0;" +
             
         "   int columnIndex = int(mod(samplerCoord(image).x / pixelWidth, 3.0)); \n" +
         "   int rowIndex = int(mod(samplerCoord(image).y, pixelHeight)); \n" +
