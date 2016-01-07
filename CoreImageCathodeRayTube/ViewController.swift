@@ -196,14 +196,12 @@ class CRTWarpFilter: CIFilter
         "{" +
         "   vec2 coord = ((destCoord() / extent) - 0.5) * 2.0;" +
 
-        "   coord *= 1.1;" +
-
         "   coord.x *= 1.0 + pow((abs(coord.y) / 3.2), 2.0);" +
         "   coord.y *= 1.0 + pow((abs(coord.x) / 3.2), 2.0);" +
     
-        "   coord  = (coord / 2.0) + 0.5;" +
+        "   coord  = ((coord / 2.0) + 0.5) * extent;" +
         
-        "   return coord * extent;" +
+        "   return coord;" +
         "}"
     )
     
